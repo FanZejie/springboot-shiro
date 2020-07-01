@@ -44,7 +44,6 @@ public class MyController {
         UsernamePasswordToken token = new UsernamePasswordToken(username, password);
         try{
             subject.login(token);
-
             return "index";
         }
         catch(UnknownAccountException e){

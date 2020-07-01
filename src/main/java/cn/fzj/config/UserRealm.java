@@ -19,6 +19,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 public class UserRealm extends AuthorizingRealm {
     @Autowired
     UserService userService;
+
+    //授权
     @Override
     protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principalCollection) {
         System.out.println("执行了=>授权doGetAuthorizationInfo");
@@ -32,20 +34,26 @@ public class UserRealm extends AuthorizingRealm {
         return info;
     }
 
+    //认证
     @Override
     protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken authenticationToken) throws AuthenticationException {
-        System.out.println("执行了=>授权doGetAuthorizationInfo");
+        System.out.println("执行了=>认证doGetAuthenticationInfo");
 
         UsernamePasswordToken userToken = (UsernamePasswordToken) authenticationToken;
         //认证用户名，密码，数据库中取
         User user = userService.queryUserByName(userToken.getUsername());
         if (user==null){//用户为空，没找到
-            return null;//会抛出一个异常
+            return null;//controller中会抛出一个异常，UnKnownAccountException
         }
         Subject currentSubject = SecurityUtils.getSubject();
         Session session = currentSubject.getSession();
         session.setAttribute("loginUser",user);//这会登陆成功就存到session
         //关于密码的认证由shiro自己做
+        /**
+         * 第一个参数是当前用户的认证
+         * 第二个是密码
+         * 第三个是域名
+         */
         return new SimpleAuthenticationInfo(user,user.getPwd(),"");
     }
 }
