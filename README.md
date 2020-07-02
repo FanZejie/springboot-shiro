@@ -304,7 +304,156 @@ bean.setLoginUrl("/toLogin");
         }
 
     }
+@RequestMapping("/noAuth")
+    @ResponseBody
+    public String unAuthorized(){
+        return "未经授权无法访问此页面";
+    }
 ```
 
 ### 认证
 #### 连接真实的数据库
+修改UserRealm.java
+
+```java
+ protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken authenticationToken) throws AuthenticationException {
+        System.out.println("执行了=>授权doGetAuthorizationInfo");
+        
+        UsernamePasswordToken userToken = (UsernamePasswordToken) authenticationToken;
+        //认证用户名，密码，数据库中取
+        User user = userService.queryUserByName(userToken.getUsername());
+        if (user==null){//用户为空，没找到
+            return null;//会抛出一个异常
+        }
+        //关于密码的认证由shiro自己做
+        return new SimpleAuthenticationInfo(user,user.getPwd(),"");
+    }//这里传回user对象，后面在授权时才能通过subject.getPrincipal()拿到user对象
+```
+
+shiroConfig.java
+
+```java
+public ShiroFilterFactoryBean getShiroFilterFactoryBean(@Qualifier("securityManager") DefaultWebSecurityManager defaultWebSecurityManager){
+        ShiroFilterFactoryBean bean = new ShiroFilterFactoryBean();
+        //设置安全管理器
+        bean.setSecurityManager(defaultWebSecurityManager);
+        //添加shiro的内置过滤器
+        /*
+            anon：无需认证就可以访问
+            authc:必须认证了才能访问
+            user:必须拥有 记住我功能才能用
+            perms:拥有对某个资源的权限才能访问
+            role：拥有某个角色权限才能访问
+         */
+        Map<String,String> filterMap = new LinkedHashMap<>();
+        //授权,然后用户点击了未授权的请求，会跳转到充值页面
+        filterMap.put("/user/add","perms[user:add]");
+    
+        filterMap.put("/user/*","authc");
+        bean.setFilterChainDefinitionMap(filterMap);
+        //设置登陆的请求
+        bean.setLoginUrl("/toLogin");
+        //设置未授权页面
+        bean.setUnauthorizedUrl("/noAuth");
+        return bean;
+    }
+```
+
+
+
+留意put的顺序
+
+
+
+## 授权
+
+
+
+修改UserRealm.java
+
+```java
+protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principalCollection) {
+        System.out.println("执行了=>授权doGetAuthorizationInfo");
+        SimpleAuthorizationInfo info = new SimpleAuthorizationInfo();
+        info.addStringPermission("user:add");
+        return info;
+    }
+```
+
+但这样是每有一个用户经过就会赋给他权限，也就是说只要用户登陆了就有权限，没有权限的分级
+
+再次修改UserRealm.java
+
+```java
+ protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principalCollection) {
+        System.out.println("执行了=>授权doGetAuthorizationInfo");
+        SimpleAuthorizationInfo info = new SimpleAuthorizationInfo();
+
+        //info.addStringPermission("user:add");
+        //拿到当前登录的这个对象
+        Subject subject = SecurityUtils.getSubject();
+        User currentUser = (User) subject.getPrincipal();//拿到user对象
+        info.addStringPermission(currentUser.getPerms());//设置当前用户的权限
+        return info;
+    }
+```
+
+修改ShiroConfig.java
+
+```java
+//授权,然后用户点击了未授权的请求，会跳转到充值页面
+        filterMap.put("/user/add","perms[user:add]");
+        filterMap.put("/user/update","perms[user:update]");
+//相当于是确认用户有没有某种权限
+```
+
+接下来，我们想让他有什么权限，就在界面上显示什么权限，没有的权限就不显示
+
+## shiro整合Thymeleaf
+
+1.导入一个整合包
+
+```xml
+<!--thymeleaf-shiro-->
+        <dependency>
+            <groupId>com.github.theborakompanioni</groupId>
+            <artifactId>thymeleaf-extras-shiro</artifactId>
+            <version>2.0.0</version>
+        </dependency>
+```
+
+2.再shiroConfig.java中整合
+
+```java
+//整合ShiroDialect:用来整合shiro thymeleaf
+    @Bean
+    public ShiroDialect getShiroDialect(){
+        return new ShiroDialect();
+    }
+```
+
+3.index
+
+```html
+<div shiro:hasPermission="user:add">
+<a th:href="@{/user/add}">add</a>
+</div>
+```
+
+4.UserRealm.java
+
+```java
+   Subject currentSubject = SecurityUtils.getSubject();
+        Session session = currentSubject.getSession();
+        session.setAttribute("loginUser",user);//这会登陆成功就存到session
+```
+
+5.index.html
+
+```html
+<div th:if="${session.loginUser==null}">
+	<a th:href="@{toLogin}">登录</a>
+</div>
+```
+
+

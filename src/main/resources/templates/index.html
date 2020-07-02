@@ -8,7 +8,7 @@
 <body>
 <h1>首页</h1>
 <div th:if="${session.loginUser==null}">
-	<a th:href="@{toLogin}">登录</a>
+	<a th:href="@{/toLogin}">登录</a>
 </div>
 <p th:text="${msg}"></p>
 <hr>
